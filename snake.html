@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Snake AI</title>
+	<link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+</head>
+<body>
+	<div class="container">
+	<div class="row">
+		<div class="col-sm-12">
+			<canvas id="game" width="400" height="300"></canvas>
+		</div>
+		<div class="col-sm-12">
+			<div class="well">
+				<ul>
+					<b>README</b>
+					<li>Press enter to begin</li>
+					<li>Press space to pause</li>
+				</ul>
+			</div>
+		</div>
+		<div class="col-sm-12">
+			<div class="row">
+				<div class="col-xs-6">
+					<ul>
+						<b>INFO</b>
+						<li>Tail:</li>
+						<li>Input:</li>
+						<li>Step:</li>
+					</ul>
+				</div>
+				<div class="col-xs-6">
+					<ul>
+						<b>TRAIN</b>
+						<li>Generation:</li>
+						<li>Individual:</li>
+						<li>Fitnes:</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+	</div>
+	</div>
+</body>
+</html>
+<script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/3.16.5/math.min.js"></script>
+<script type="text/javascript">
+	//=================
+	// Game Algorithm
+	//=================
+
+	//Initializes canvas context
+	let ctx = document.getElementById('game').getContext('2d')
+	let $canvas = $("#game").get(0)
+
+	//Variable used in order to pause the game or training
+	let pause = false;
+	
+	//Fills the canvas background
+	ctx.fillStyle = "black"
+	ctx.fillRect (0, 0, $canvas.width, $canvas.height);
+
+	//Initializes the maximun steps in X and Y
+	const xrectangles = 16
+	const yrectangles = 12
+
+	//Initializes the pixel size of each rectangle on the screen
+	const grid = initGrid(xrectangles,yrectangles)
+
+	//Initializes the snake and apple obj, the tail will contain the position of the snake tail
+	let snake = {
+		xpos : getRandomPositon().newxpos,
+		ypos : getRandomPositon().newypos,
+		xvel : 0,
+		yvel : 0,
+		tail : 0
+	}
+	let apple = {
+		xpos : getRandomPositon().newxpos,
+		ypos : getRandomPositon().newypos,
+	}
+	let tail = []
+
+	//Initializes the neural network architecture (hidden layers and output)
+	const neuralLayers = [30,4]
+	//initializes data used in training
+	let geracao = 0
+	let geracaoMax = 1e1 //Optimize later
+	let individuos = 0
+	let individuosMax = 10
+	let fitness = 0
+	let step = 0
+	let input = {
+		xpos : snake.xpos/$canvas.width,
+		ypos : snake.ypos/$canvas.height,
+		xvel : snake.xvel,
+		yvel : snake.yvel,
+		xdist : (snake.xpos - apple.xpos)/$canvas.width,
+		ydist : (snake.ypos - apple.ypos)/$canvas.height,
+	}
+	let neural = neuralNetwork(neuralLayers, input)
+	
+
+	//Draws the snake
+	ctx.fillStyle = "lime"
+	ctx.fillRect(snake.xpos, snake.ypos, grid.pixelsX, grid.pixelsY) 
+
+	//Draws the apple
+	ctx.fillStyle = "red"
+	ctx.fillRect(apple.xpos, apple.ypos, grid.pixelsX, grid.pixelsY)
+
+	//Automatically starts the game
+	play()
+
+	function play(){
+		//Initializes timer
+		let refreshIntervalId = setInterval(function(){
+			//Checks if the game is not paused, it pauses the game while it`s updating weigths and etc...
+			if(!pause){
+				// console.log(fitness)
+				// console.log(step)
+
+				//Updates the screen on each time interval
+				ctx.fillStyle = "black"
+				ctx.fillRect (0, 0, $canvas.width, $canvas.height);
+
+				//Loads last head position before changing it, this makes the first position of the tail be always updated, later its size will be checked and if it isn`t right the older elements will be removed
+				tail.push({xpos : snake.xpos , ypos : snake.ypos})
+
+
+				//Momentum of the snake
+				snake.xpos += snake.xvel*grid.pixelsX
+				snake.ypos += snake.yvel*grid.pixelsY
+
+				//Snake passes though the wall
+				if(snake.xpos < 0){
+					snake.xpos = grid.pixelsX*(xrectangles-1)
+				} else if(snake.xpos == grid.pixelsX*xrectangles){
+					snake.xpos = 0
+				} else if(snake.ypos < 0){
+					snake.ypos = grid.pixelsY*(yrectangles-1)
+				} else if(snake.ypos == grid.pixelsY*yrectangles){
+					snake.ypos = 0
+				}
+
+				//Draws the snake head
+				ctx.fillStyle = "lime"
+				ctx.fillRect(snake.xpos, snake.ypos, grid.pixelsX, grid.pixelsY) 
+
+				//Removes the first tail array element (older one) while the tale isn`t in the right size, because the tail array is updated with the head position in the begining of every step
+				while (tail.length > snake.tail){
+					tail.shift()
+				}
+
+				//Draws the apple
+				ctx.fillStyle = "red"
+				ctx.fillRect(apple.xpos, apple.ypos, grid.pixelsX, grid.pixelsY)
+				
+				//Draws the tail
+				for (var i = 0; i < snake.tail; i++) {
+					ctx.fillStyle = "lime"
+					ctx.fillRect(tail[i].xpos, tail[i].ypos, grid.pixelsX, grid.pixelsY) 
+					
+					//Checks the colision of the snake
+					if (tail[i].xpos == snake.xpos && tail[i].ypos == snake.ypos) {
+						//Resets the tail size - In training it`s done elsewhere
+						//snake.tail = 0
+						pause = true
+					}
+				}				
+
+				//Checks if the snake ate an apple
+				if(snake.xpos == apple.xpos && snake.ypos == apple.ypos){
+					//Increases the snake tail
+					snake.tail++
+					fitness += 100
+					
+					//Draws snake over apple
+					ctx.fillStyle = "lime"
+					ctx.fillRect(apple.xpos, apple.ypos, grid.pixelsX, grid.pixelsY)
+
+					//Changes apple position
+					apple.xpos = getRandomPositon().newxpos
+					apple.ypos = getRandomPositon().newypos
+				}
+
+				//Updates the new inputs to the neural network
+				input = {
+					xpos : snake.xpos/$canvas.width,
+					ypos : snake.ypos/$canvas.height,
+					xvel : snake.xvel,
+					yvel : snake.yvel,
+					xdist : (snake.xpos - apple.xpos)/$canvas.width,
+					ydist : (snake.ypos - apple.ypos)/$canvas.height,
+				}
+
+				let output = foward(input)
+
+				//DEBUG
+				if (step==10) {
+					console.log(input)
+					console.log(neural)		
+					console.log(output)		
+				}	
+
+
+				let maxOutput = math.max(output[neuralLayers.length-1])
+				if (maxOutput > 0.5) {
+					triggerController(output[neuralLayers.length-1], maxOutput)
+				}
+
+				step++
+
+			} else {
+				//Executes this while the game rendering is paused
+				//The main ideia here is to pause the counter until the weights, biases and genetic algorithm are updated
+
+				if(geracao < geracaoMax){
+					
+					console.log('Saving fitness and weights for individual '+individuos+' from generation '+geracao+'...')
+					// saveFitness()
+					// saveWeights()
+					fitness = 0
+					step = 0
+					
+					//Increments the individue and checks if is necessary to create a new generation
+					if(individuos < individuosMax){
+						individuos++
+					} else {
+						geracao++
+						individuos = 0
+					}
+
+					//Checks the current generation, if it`s the first (generation 0), the network parameters are created in a random way, otherwise the parameters are optimizied by the genetic algorithm
+					if (geracao == 0) {
+						console.log('Generating new weigths and biases...')
+						neural = neuralNetwork(neuralLayers, input)
+						console.log(neural)
+					} else {
+						console.log('Genetic algorithm is selecting new weigths and biases...')
+					}
+					
+					console.log('Reseting render...')
+					snake.tail = 0
+					snake.xvel = 0
+					snake.yvel = 0
+					
+					console.log('Restarting game with new weigths')
+					pause = false
+				} else {
+					//The train and simulation is over
+					console.log('Finished!')
+					clearInterval(refreshIntervalId);
+				}
+			}
+		}, 1000/10)
+	}
+
+	function initGrid(gridX, gridY){
+		const pixelsX = math.round($canvas.width/gridX)
+		const pixelsY = math.round($canvas.height/gridY)
+		return {pixelsX : pixelsX, pixelsY : pixelsY}
+	}
+	
+	//In a random way initializes the position of a rectangle on screen
+	function getRandomPositon(){
+		const newxpos =  math.randomInt(0,xrectangles-1)*grid.pixelsX
+		const newypos =  math.randomInt(0,yrectangles-1)*grid.pixelsY
+		return {newxpos : newxpos, newypos : newypos}
+	}
+
+	//Listens to key press element
+	$(document).keydown(function(evt){
+		switch(evt.keyCode){
+			//enter
+			case 13:
+				// play()
+			break
+			//left
+			case 37:
+				snake.yvel = 0
+				snake.xvel = -1
+				//Changes in position are incetivised
+				fitness += 2
+			break
+			//up
+			case 38:
+				snake.yvel = -1
+				snake.xvel = 0
+				//Changes in position are incetivised
+				fitness += 2
+			break
+			//right
+			case 39:
+				snake.yvel = 0
+				snake.xvel = 1
+				//Changes in position are incetivised
+				fitness += 2
+			break
+			//down
+			case 40:
+				snake.yvel = 1
+				snake.xvel = 0
+				//Changes in position are incetivised
+				fitness += 2
+			break
+		}
+	})
+
+	//Measures the maximum output and if its enought shots the appropriate controller
+	function triggerController(output, maxOutput){
+		output.map(function(out,key){
+			if (out == maxOutput) {
+				let e = $.Event("keydown");
+				switch(key){
+					case 0:
+						e.which = 37
+                		e.keyCode = 37
+					break
+					case 1:
+						e.which = 38
+                		e.keyCode = 38
+					break
+					case 2:
+						e.which = 39
+                		e.keyCode = 39
+					break
+					case 3:
+						e.which = 40
+                		e.keyCode = 40
+					break
+				}
+				$("body").trigger(e);
+			}
+		})
+	}
+
+	//===================
+	// Train Algorithm
+	//===================
+
+	//===================
+	// Neural Network
+	//===================
+	function neuralNetwork(neuralLayers, input){
+		let inputSize = Object.keys(input).length
+		
+		//Its done both in obj and array to compare and learn from both
+
+		let weightObj = {}
+		let biasObj = {}
+
+		let weightArr = []
+		let biasArr = []
+
+		neuralLayers.map(function(numNeurons,layer){
+		//each layer
+			//creates the input layer
+			let layerInputSize = (layer == 0) ? inputSize : neuralLayers[layer-1]
+
+			let weight = []
+			let bias = []
+			for (var i = 0; i < layerInputSize; i++) {
+				//each input
+				weight[i] = []
+				for (var n = 0; n < numNeurons; n++) {
+				//each neuron
+					weight[i][n] = math.round(math.random(),2)
+					bias[n] = math.round(math.random(),2)
+				}
+			}
+			weightObj[layer] = weight
+			biasObj[layer] = bias
+
+			weightArr.push(weight)
+			biasArr.push(bias)
+			
+		})
+
+		return {weight : weightObj, bias : biasObj}	
+	}
+
+	function foward(){
+		//Its done both in obj and array to compare and learn from both
+		//Probably because of the facility and less operations, the array will be chosen, but
+		//the general information will be saved in a object
+
+		//Passes the input throgth the network and generates a new input
+
+		// nonlinearity(input*weight + biasKey)
+		let inputArr = Object.keys(input).map(function(key){
+			// console.log(key)
+			return input[key]
+		}) //[6,1]
+
+		let weightArr = Object.keys(neural.weight).map(function(key){
+			return neural.weight[key]
+		}) //[[6,20],[20,20],[20,4]]
+
+		let biasArr = Object.keys(neural.bias).map(function(key){
+			return neural.bias[key]
+		}) //[[20,1],[20,1],[4,1]]
+
+		// console.log(weightArr)
+
+		let inputSize = Object.keys(input).length
+		let output = []
+
+		//Progagates the new output, insert nonlinearity to hidden layers output, in this case the output will use softmax and the hidden layers will use (relu or softmax)
+		neuralLayers.map(function(numNeurons,layer){
+			let input = (layer == 0) ? inputArr : output[layer-1]
+			let nonlinearityType = ((neuralLayers.length-1) == layer) ? 'softmax' : 'sigmoid'
+			output.push(nonlinearity(math.add(math.multiply(input, weightArr[layer]),biasArr[layer]),nonlinearityType))
+		})
+
+		return output
+	}
+
+	function nonlinearity(input, type){
+		let ret = []
+		switch (type){
+			case 'sigmoid':
+				ret = input.map(function(x){
+					let exp = Math.exp(-1*x)
+        			return 1/(1+exp)
+				})
+			break
+			case 'relu':
+				ret = input.map(function(inp){
+					return (inp>=0) ? inp : 0
+				})
+			break
+			case 'softmax':
+				let sumExpLastValues = input.reduce((x,y) => x+= math.exp(y),0)
+				ret = input.map(function(x){
+					let exp = Math.exp(x)
+        			return exp/sumExpLastValues
+				})
+			break
+			default:
+				console.log('Error: Activation Function not Found')
+			break
+		}
+		return ret
+	}
+
+</script>
