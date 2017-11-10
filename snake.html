@@ -10,7 +10,7 @@
 		<div class="col-sm-12">
 			<canvas id="game" width="400" height="300"></canvas>
 		</div>
-		<div class="col-sm-12">
+		<!-- <div class="col-sm-12">
 			<div class="well">
 				<ul>
 					<b>README</b>
@@ -38,7 +38,7 @@
 					</ul>
 				</div>
 			</div>
-		</div>
+		</div> -->
 	</div>
 	</div>
 </body>
@@ -86,11 +86,21 @@
 	const neuralLayers = [30,4]
 	//initializes data used in training
 	let geracao = 0
-	let geracaoMax = 1e1 //Optimize later
-	let individuos = 0
-	let individuosMax = 10
+	let geracaoMax = 10 //Optimize later
+	let genome = 0
+	let genomeMax = 6
 	let fitness = 0
+	
+	let neuralGeneration = []
+	let fitnessGeneration = []
+
+	//Saves the selected individuals
+	let bestfitness = []
+	let bestNeural = []
+
 	let step = 0
+
+	//Change input to care only for the elements in the view of the snake and maybe the distances to the apple
 	let input = {
 		xpos : snake.xpos/$canvas.width,
 		ypos : snake.ypos/$canvas.height,
@@ -100,7 +110,12 @@
 		ydist : (snake.ypos - apple.ypos)/$canvas.height,
 	}
 	let neural = neuralNetwork(neuralLayers, input)
-	
+
+	//Initializes a counter and how long the snake can do nothing in each axys
+	let countx = 0
+	let countxMax = 50
+	let county = 0
+	let countyMax = 50
 
 	//Draws the snake
 	ctx.fillStyle = "lime"
@@ -110,12 +125,14 @@
 	ctx.fillStyle = "red"
 	ctx.fillRect(apple.xpos, apple.ypos, grid.pixelsX, grid.pixelsY)
 
+	let refreshIntervalId
+
 	//Automatically starts the game
 	play()
 
 	function play(){
 		//Initializes timer
-		let refreshIntervalId = setInterval(function(){
+		refreshIntervalId = setInterval(function(){
 			//Checks if the game is not paused, it pauses the game while it`s updating weigths and etc...
 			if(!pause){
 				// console.log(fitness)
@@ -129,6 +146,9 @@
 				tail.push({xpos : snake.xpos , ypos : snake.ypos})
 
 
+				//Saves the last state of the snake
+				let lastxpos = snake.xpos
+				let lastypos = snake.ypos
 				//Momentum of the snake
 				snake.xpos += snake.xvel*grid.pixelsX
 				snake.ypos += snake.yvel*grid.pixelsY
@@ -166,6 +186,7 @@
 					if (tail[i].xpos == snake.xpos && tail[i].ypos == snake.ypos) {
 						//Resets the tail size - In training it`s done elsewhere
 						//snake.tail = 0
+						fitness -= 200
 						pause = true
 					}
 				}				
@@ -185,6 +206,38 @@
 					apple.ypos = getRandomPositon().newypos
 				}
 
+				//DEBUG
+				// if (step==10) {
+				// 	console.log(input)
+				// 	console.log(neural)		
+				// 	console.log(output)		
+				// }	
+
+				//kills the snake if it does nothing for a defined period
+				if (countx < countxMax) {
+					if(lastxpos == snake.xpos){
+						countx ++
+					} else {
+						countx = 0
+					}
+				} else {
+					countx = 0
+					pause = true
+					fitness -= 50
+				}
+
+				if(county < countyMax){
+					if(lastypos == snake.ypos){
+						county ++
+					} else {
+						county = 0
+					}
+				} else {
+					county = 0
+					pause = true
+					fitness -= 50
+				}
+
 				//Updates the new inputs to the neural network
 				input = {
 					xpos : snake.xpos/$canvas.width,
@@ -197,62 +250,17 @@
 
 				let output = foward(input)
 
-				//DEBUG
-				if (step==10) {
-					console.log(input)
-					console.log(neural)		
-					console.log(output)		
-				}	
-
-
+				//Analizing the output of the network, automatically updates the controler in each round
 				let maxOutput = math.max(output[neuralLayers.length-1])
 				if (maxOutput > 0.5) {
 					triggerController(output[neuralLayers.length-1], maxOutput)
 				}
-
 				step++
 
 			} else {
 				//Executes this while the game rendering is paused
 				//The main ideia here is to pause the counter until the weights, biases and genetic algorithm are updated
-
-				if(geracao < geracaoMax){
-					
-					console.log('Saving fitness and weights for individual '+individuos+' from generation '+geracao+'...')
-					// saveFitness()
-					// saveWeights()
-					fitness = 0
-					step = 0
-					
-					//Increments the individue and checks if is necessary to create a new generation
-					if(individuos < individuosMax){
-						individuos++
-					} else {
-						geracao++
-						individuos = 0
-					}
-
-					//Checks the current generation, if it`s the first (generation 0), the network parameters are created in a random way, otherwise the parameters are optimizied by the genetic algorithm
-					if (geracao == 0) {
-						console.log('Generating new weigths and biases...')
-						neural = neuralNetwork(neuralLayers, input)
-						console.log(neural)
-					} else {
-						console.log('Genetic algorithm is selecting new weigths and biases...')
-					}
-					
-					console.log('Reseting render...')
-					snake.tail = 0
-					snake.xvel = 0
-					snake.yvel = 0
-					
-					console.log('Restarting game with new weigths')
-					pause = false
-				} else {
-					//The train and simulation is over
-					console.log('Finished!')
-					clearInterval(refreshIntervalId);
-				}
+				geneticAlgorithm()
 			}
 		}, 1000/10)
 	}
@@ -339,6 +347,49 @@
 	//===================
 	// Train Algorithm
 	//===================
+
+	function geneticAlgorithm(){
+
+		if(geracao < geracaoMax){
+			
+			console.log('Saving fitness and weights for genome '+genome+' from generation '+geracao+'...')
+			neuralGeneration.push(neural)
+			fitnessGeneration.push(fitness)
+
+			// Resets the fitness
+			fitness = 0
+			step = 0
+
+			//Checks the current generation, if it`s the first (generation 0), the network parameters are created in a random way, otherwise the parameters are optimizied by the genetic algorithm
+			if (geracao == 0) {
+				console.log('Generating new weigths and biases...')
+				neural = neuralNetwork(neuralLayers, input)
+			} else {
+				console.log('Genetic algorithm is selecting new weigths and biases...')	
+			}
+
+			//Increments the individue and checks if is necessary to create a new generation
+			if(genome < genomeMax){
+				genome++
+			} else {
+				geracao++
+				genome = 0
+			}
+
+			console.log('Reseting render...')
+			snake.tail = 0
+			snake.xvel = 0
+			snake.yvel = 0
+			
+			console.log('Restarting game with new weigths')
+			pause = false
+		} else {
+			//The train and simulation is over
+			console.log('Finished!')
+			clearInterval(refreshIntervalId);
+
+		}
+	}
 
 	//===================
 	// Neural Network
