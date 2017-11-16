@@ -6,40 +6,40 @@
 </head>
 <body>
 	<div class="container">
-	<div class="row">
-		<div class="col-sm-12">
-			<canvas id="game" width="400" height="300"></canvas>
-		</div>
-		<!-- <div class="col-sm-12">
-			<div class="well">
-				<ul>
-					<b>README</b>
-					<li>Press enter to begin</li>
-					<li>Press space to pause</li>
-				</ul>
+		<div class="row text-center">
+			<div class="col-sm-12">
+				<canvas id="game" width="400" height="300"></canvas>
 			</div>
-		</div>
-		<div class="col-sm-12">
-			<div class="row">
-				<div class="col-xs-6">
+			<!-- <div class="col-sm-12">
+				<div class="well">
 					<ul>
-						<b>INFO</b>
-						<li>Tail:</li>
-						<li>Input:</li>
-						<li>Step:</li>
-					</ul>
-				</div>
-				<div class="col-xs-6">
-					<ul>
-						<b>TRAIN</b>
-						<li>Generation:</li>
-						<li>Individual:</li>
-						<li>Fitnes:</li>
+						<b>README</b>
+						<li>Press enter to begin</li>
+						<li>Press space to pause</li>
 					</ul>
 				</div>
 			</div>
-		</div> -->
-	</div>
+			<div class="col-sm-12">
+				<div class="row">
+					<div class="col-xs-6">
+						<ul>
+							<b>INFO</b>
+							<li>Tail:</li>
+							<li>Input:</li>
+							<li>Step:</li>
+						</ul>
+					</div>
+					<div class="col-xs-6">
+						<ul>
+							<b>TRAIN</b>
+							<li>Generation:</li>
+							<li>Individual:</li>
+							<li>Fitnes:</li>
+						</ul>
+					</div>
+				</div>
+			</div> -->
+		</div>
 	</div>
 </body>
 </html>
@@ -51,8 +51,8 @@
 	//=================
 
 	//Initializes canvas context
-	let ctx = document.getElementById('game').getContext('2d')
-	let $canvas = $("#game").get(0)
+	const ctx = document.getElementById('game').getContext('2d')
+	const $canvas = $("#game").get(0)
 
 	//Variable used in order to pause the game or training
 	let pause = false;
@@ -86,13 +86,14 @@
 	const neuralLayers = [30,4]
 	//initializes data used in training
 	let geracao = 0
-	let geracaoMax = 10 //Optimize later
+	const geracaoMax = 2 //Optimize later
 	let genome = 0
-	let genomeMax = 6
+	const genomeMax = 6
 	let fitness = 0
 	
 	let neuralGeneration = []
 	let fitnessGeneration = []
+	let newPopulation = []
 
 	//Saves the selected individuals
 	let bestfitness = []
@@ -100,22 +101,18 @@
 
 	let step = 0
 
-	//Change input to care only for the elements in the view of the snake and maybe the distances to the apple
-	let input = {
-		xpos : snake.xpos/$canvas.width,
-		ypos : snake.ypos/$canvas.height,
-		xvel : snake.xvel,
-		yvel : snake.yvel,
-		xdist : (snake.xpos - apple.xpos)/$canvas.width,
-		ydist : (snake.ypos - apple.ypos)/$canvas.height,
-	}
+	//Input cares only for the elements in the view of the snake and the distances to the apple
+	let input = getInputs()
+
+	console.log('Generating initial weigths and biases...')
 	let neural = neuralNetwork(neuralLayers, input)
+	let neuralMutation = {}
 
 	//Initializes a counter and how long the snake can do nothing in each axys
 	let countx = 0
-	let countxMax = 50
+	const countxMax = 50
 	let county = 0
-	let countyMax = 50
+	const countyMax = 50
 
 	//Draws the snake
 	ctx.fillStyle = "lime"
@@ -186,7 +183,7 @@
 					if (tail[i].xpos == snake.xpos && tail[i].ypos == snake.ypos) {
 						//Resets the tail size - In training it`s done elsewhere
 						//snake.tail = 0
-						fitness -= 200
+						// fitness -= 1000
 						pause = true
 					}
 				}				
@@ -195,7 +192,7 @@
 				if(snake.xpos == apple.xpos && snake.ypos == apple.ypos){
 					//Increases the snake tail
 					snake.tail++
-					fitness += 100
+					fitness += 200
 					
 					//Draws snake over apple
 					ctx.fillStyle = "lime"
@@ -219,11 +216,13 @@
 						countx ++
 					} else {
 						countx = 0
+						//Changes in postition are incentivised
+						fitness += 5
 					}
 				} else {
 					countx = 0
 					pause = true
-					fitness -= 50
+					// fitness -= 50
 				}
 
 				if(county < countyMax){
@@ -231,23 +230,17 @@
 						county ++
 					} else {
 						county = 0
+						//Changes in postition are incentivised
+						fitness += 5
 					}
 				} else {
 					county = 0
 					pause = true
-					fitness -= 50
+					// fitness -= 50
 				}
 
 				//Updates the new inputs to the neural network
-				input = {
-					xpos : snake.xpos/$canvas.width,
-					ypos : snake.ypos/$canvas.height,
-					xvel : snake.xvel,
-					yvel : snake.yvel,
-					xdist : (snake.xpos - apple.xpos)/$canvas.width,
-					ydist : (snake.ypos - apple.ypos)/$canvas.height,
-				}
-
+				input = getInputs()
 				let output = foward(input)
 
 				//Analizing the output of the network, automatically updates the controler in each round
@@ -289,29 +282,21 @@
 			case 37:
 				snake.yvel = 0
 				snake.xvel = -1
-				//Changes in position are incetivised
-				fitness += 2
 			break
 			//up
 			case 38:
 				snake.yvel = -1
 				snake.xvel = 0
-				//Changes in position are incetivised
-				fitness += 2
 			break
 			//right
 			case 39:
 				snake.yvel = 0
 				snake.xvel = 1
-				//Changes in position are incetivised
-				fitness += 2
 			break
 			//down
 			case 40:
 				snake.yvel = 1
 				snake.xvel = 0
-				//Changes in position are incetivised
-				fitness += 2
 			break
 		}
 	})
@@ -344,51 +329,247 @@
 		})
 	}
 
+	function getInputs(){
+
+		//Input cares about what is ahead, on right and on left of the snake, and also the distance from the apple
+		//Elements to input:
+		//Apple: +1, Tail: -1, Nothing: 0
+
+		let xdist = (snake.xpos - apple.xpos)/$canvas.width
+		let ydist = (snake.ypos - apple.ypos)/$canvas.height
+
+
+		let ahead = 0
+		if (snake.xvel != 0) {
+			//this means that the snake is moving in the x axys
+
+			//Checks if there is an apple ahead
+			ahead = (snake.xpos + snake.xvel *  grid.pixelsX === apple.xpos && snake.ypos === apple.ypos) ?  1 : 0
+
+			//Checks if the tail is ahead
+			if(tail){
+				for (let i = 0; i < tail.length; i++) {
+					//Checks the colision of the snake
+					if ((snake.xpos + snake.xvel *  grid.pixelsX) ===  tail[i].xpos && snake.ypos === tail[i].ypos) {
+						ahead = -1
+					}
+				}
+			}
+		} else if (snake.yvel != 0) {
+			//this means that the snake is moving in the x axys
+			//Checks if there is an apple ahead
+			ahead = (snake.ypos + snake.yvel * grid.pixelsY === apple.ypos && snake.xpos === apple.xpos) ?  1 : 0
+			//Checks if the tail is ahead
+			if (tail) {
+				for (let i = 0; i < tail.length; i++) {
+					//Checks the colision of the snake
+					if ((snake.ypos + snake.yvel * grid.pixelsY) ===  tail[i].ypos && snake.xpos === tail[i].xpos) {
+						ahead = -1
+					}
+				}
+			}
+		}
+
+		let onRight = 0
+		let onLeft = 0
+		//Checks what is beside, in all possible moves
+		if (snake.xvel != 0) {
+			//Checks the apple beside
+			onRight = (snake.xpos === apple.xpos && (snake.ypos +  snake.xvel *  grid.pixelsY) === apple.ypos) ?  1 : 0
+			onLeft = (snake.xpos === apple.xpos && (snake.ypos -  snake.xvel *  grid.pixelsY) === apple.ypos) ?  1 : 0
+			//Checks if the tail is beside
+			if (tail) {
+				for (let i = 0; i < tail.length; i++) {
+					//Checks the colision of the snake
+					if (snake.xpos === tail[i].xpos && (snake.ypos + snake.xvel * grid.pixelsY) ===  tail[i].ypos) onRight = -1
+					if (snake.xpos === tail[i].xpos && (snake.ypos - snake.xvel * grid.pixelsY) ===  tail[i].ypos) onLeft = -1
+				}
+			}
+		} else if (snake.yvel != 0) {
+			//Checks the apple beside
+			onLeft = (snake.ypos === apple.ypos && (snake.xpos +  snake.yvel *  grid.pixelsX) === apple.xpos) ?  1 : 0
+			onRight = (snake.ypos === apple.ypos && (snake.xpos -  snake.yvel *  grid.pixelsX) === apple.xpos) ?  1 : 0
+			//Checks if the tail is beside
+			if (tail) {
+				for (let i = 0; i < tail.length; i++) {
+					//Checks the colision of the snake
+					if (snake.ypos === tail[i].ypos && (snake.xpos + snake.yvel * grid.pixelsX) ===  tail[i].xpos) onLeft = -1
+					if (snake.ypos === tail[i].ypos && (snake.xpos - snake.yvel * grid.pixelsX) ===  tail[i].xpos) onRight = -1
+				}
+			}
+
+		}
+	
+		return { ahead : ahead, onRight: onRight, onLeft: onLeft, xdist : xdist, ydist : ydist}
+	}
+
 	//===================
 	// Train Algorithm
 	//===================
 
 	function geneticAlgorithm(){
-
 		if(geracao < geracaoMax){
+
+			//================================
+			//Gets info from last step
+			console.log('neuralGeneration: ', neuralGeneration)
+			console.log('fitnessGeneration: ', fitnessGeneration)
 			
 			console.log('Saving fitness and weights for genome '+genome+' from generation '+geracao+'...')
+			console.log('------------')
+
 			neuralGeneration.push(neural)
 			fitnessGeneration.push(fitness)
 
-			// Resets the fitness
-			fitness = 0
-			step = 0
-
-			//Checks the current generation, if it`s the first (generation 0), the network parameters are created in a random way, otherwise the parameters are optimizied by the genetic algorithm
-			if (geracao == 0) {
-				console.log('Generating new weigths and biases...')
-				neural = neuralNetwork(neuralLayers, input)
-			} else {
-				console.log('Genetic algorithm is selecting new weigths and biases...')	
-			}
+			//===================================
+			//Defines everithing for next step
 
 			//Increments the individue and checks if is necessary to create a new generation
-			if(genome < genomeMax){
+			if(genome < (genomeMax-1)){
 				genome++
 			} else {
 				geracao++
 				genome = 0
 			}
 
-			console.log('Reseting render...')
+			//Checks the current generation(next step), if it`s the first (generation 0), the network parameters are created in a random way, otherwise the parameters are optimizied by the genetic algorithm, don`t forget, the execution already starts in the last step with a rando initialization of the neural network
+			if (geracao == 0 && (genome < (genomeMax))) {
+				console.log('Generating new weigths and biases...')
+				neural = neuralNetwork(neuralLayers, input)
+
+			} else {
+				//Restes on the end of begin of generation the Neural and Fitness information of last generation
+				if (genome == 0 && geracao != geracaoMax) {
+					console.log("Cross-Over and Generation of New Population")
+					newPopulation = mutation(neuralGeneration, fitnessGeneration)
+					neuralGeneration = []
+					fitnessGeneration = []
+				}
+
+				if (geracao != geracaoMax) {
+					console.log('Genetic algorithm is selecting new weigths and biases...')
+					//neural = newPopulation[genome]				
+				}
+
+			}
+			// Resets the fitness
+			fitness = 0
+			step = 0
+			
+
 			snake.tail = 0
 			snake.xvel = 0
 			snake.yvel = 0
 			
-			console.log('Restarting game with new weigths')
 			pause = false
 		} else {
 			//The train and simulation is over
 			console.log('Finished!')
 			clearInterval(refreshIntervalId);
 
+			console.log('Laste Generation Neurons',neuralGeneration)
+			console.log('Laste Generation Fitness',fitnessGeneration)
+
+
+			console.log('Melhor Fitness: ', bestfitness)
+			console.log('Melhores Ganhos: ', bestNeural)
+
 		}
+
+	}
+
+	function mutation(neuralGeneration, fitnessGeneration){
+		let somaFit = 0
+
+		console.log(fitnessGeneration)
+
+		// Wheel Selection
+		//===========================================================
+		fitnessGeneration.map(function(fit, index){
+			somaFit += fit
+		})
+
+		let parents = []
+
+		while(parents.length < genomeMax){
+			let randomSelection = math.random(somaFit)
+			let tempSum = 0
+			let count = 0 //FIX, Find more efficient way to do it, use reduce
+
+			//Warning: Not efficient
+			fitnessGeneration.map(function(fit, index){
+				tempSum += fit
+				if (tempSum >= randomSelection && count === 0) {
+					parents.push(neuralGeneration[index])
+					count++
+				}
+			})
+
+
+		}
+
+		// DNA Creation with the selected parents
+		//===========================================================
+		// Initial Idea:
+		// DNA will have the following sequence:
+		// weightsLayer1 + BiasLayer1 + weightsLayer2 + BiasLayer12
+		//===========================================================
+		let parentsDNA = []
+		parentsDNA = parents.map(function(neural, parentId){
+			let DNA = []
+			let neuralLayerSize = neural.weight.length
+			for (let i = 0; i < neuralLayerSize; i++) {
+				let weightNeuronsSize = neural.weight[i].length
+				for (let j = 0; j < weightNeuronsSize; j++) {
+					DNA = DNA.concat(neural.weight[i][j])
+				}
+				DNA = DNA.concat(neural.bias[i])
+			}
+			return DNA
+		})
+
+		console.log(parentsDNA)
+
+		// DNA CrossOver and Mutation
+		//===========================================================
+		// Initially, both mutation and Cross-Over happens in only 
+		// one point of the parents array
+
+		//Percentual of chance to happen a cross-over
+		let pc = 1
+
+		//Percential of chance to happen a mutation
+		let pm = 0.1
+
+		siblings = []
+
+
+		siblings = parentsDNA.map(function(parentDNA, index){
+			let parent2Index = math.randomInt(genomeMax-1)
+			let parent2DNA = parentsDNA[parent2Index]
+			
+			//Initializes the sibling equals to his father
+			let sibling = parentDNA
+			
+			let maxIndexDNA = parentDNA.length
+
+			if (math.random() <= pc) {
+				let alpha = math.randomInt(maxIndexDNA)
+				console.log('alpha',alpha)
+				sibling = []
+				sibling = sibling.concat(parentDNA.slice(0,alpha))
+				sibling = sibling.concat(parent2DNA.slice(alpha,maxIndexDNA))
+			}
+
+			// if (math.random() <= pm) {
+			// 	let alpha = math.randomInt(maxIndexDNA)
+			// }
+			return sibling;
+		})
+
+		console.log(siblings)
+
+		
 	}
 
 	//===================
@@ -396,11 +577,6 @@
 	//===================
 	function neuralNetwork(neuralLayers, input){
 		let inputSize = Object.keys(input).length
-		
-		//Its done both in obj and array to compare and learn from both
-
-		let weightObj = {}
-		let biasObj = {}
 
 		let weightArr = []
 		let biasArr = []
@@ -421,39 +597,25 @@
 					bias[n] = math.round(math.random(),2)
 				}
 			}
-			weightObj[layer] = weight
-			biasObj[layer] = bias
 
 			weightArr.push(weight)
 			biasArr.push(bias)
 			
 		})
 
-		return {weight : weightObj, bias : biasObj}	
+		return {weight : weightArr, bias : biasArr}	
 	}
 
 	function foward(){
-		//Its done both in obj and array to compare and learn from both
-		//Probably because of the facility and less operations, the array will be chosen, but
-		//the general information will be saved in a object
-
 		//Passes the input throgth the network and generates a new input
 
-		// nonlinearity(input*weight + biasKey)
 		let inputArr = Object.keys(input).map(function(key){
 			// console.log(key)
 			return input[key]
-		}) //[6,1]
+		}) //Ex: [6,1]
 
-		let weightArr = Object.keys(neural.weight).map(function(key){
-			return neural.weight[key]
-		}) //[[6,20],[20,20],[20,4]]
-
-		let biasArr = Object.keys(neural.bias).map(function(key){
-			return neural.bias[key]
-		}) //[[20,1],[20,1],[4,1]]
-
-		// console.log(weightArr)
+		let weightArr = neural.weight //Ex: [[6,20],[20,20],[20,4]]
+		let biasArr = neural.bias //Ex: [[20,1],[20,1],[4,1]]
 
 		let inputSize = Object.keys(input).length
 		let output = []
@@ -462,6 +624,7 @@
 		neuralLayers.map(function(numNeurons,layer){
 			let input = (layer == 0) ? inputArr : output[layer-1]
 			let nonlinearityType = ((neuralLayers.length-1) == layer) ? 'softmax' : 'sigmoid'
+			// nonlinearity(input*weight + biasKey)
 			output.push(nonlinearity(math.add(math.multiply(input, weightArr[layer]),biasArr[layer]),nonlinearityType))
 		})
 
